@@ -1,6 +1,6 @@
 # network-infrastructure
 # Description
-This project creates a VPC, Public Subnet, Private Subnet, Ec2 , Security Groups, Nat Gateway, Network Interface,IGW, LoadBalancer, AutoScalingGroup, Route53
+This project creates a VPC, Public Subnet, Private Subnet, Ec2 , Security Groups, Network Interface,IGW, LoadBalancer, AutoScalingGroup, Route53
 # prerequisites
 Python installed
 Pip installed
