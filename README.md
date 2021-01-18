@@ -13,6 +13,9 @@ aws acces token
 # deploy template
 AWS Cli
 
+#install troposphere
+pip install troposphere
+
 # install awscli
 pip install awscli
 
