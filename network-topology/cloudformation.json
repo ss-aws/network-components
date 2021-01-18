@@ -1,4 +1,4 @@
 {
   "folder" : "network-topology",
-  "template" :"/tempaltes/network-components-ec2-userdata-template.yaml"
+  "template" :"/templates/network-components-ec2-userdata-template.yaml"
 }
