@@ -1,0 +1,9 @@
+{
+    "VpcCidrRange": "10.0.0.0/20",
+    "PrivCidrRanges": "10.0.0.0/24,10.0.1.0/24",
+    "PubCidrRanges": "10.0.3.0/24,10.0.4.0/24",
+    "SecurityGroup":"55.55.55.55/32",
+    "AvailabilityZone":"us-east-1",
+    "AMIList":"ami-dd48a1ac,ami-eb4ca59a,ami-dc48a1ad",
+    "SSHKey":"Shweta"
+  }

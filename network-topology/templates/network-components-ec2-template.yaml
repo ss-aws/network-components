@@ -1,0 +1,301 @@
+Mappings:
+  AzMap:
+    us-east-1a:
+      AMI: ami-dd48a1ac
+    us-east-1b:
+      AMI: ami-eb4ca59a
+    us-east-1c:
+      AMI: ami-dc48a1ad
+Outputs:
+  MyVpcId:
+    Value: !Ref 'MyVpc'
+  PrivSubnetCidrA:
+    Value: !Select
+      - 0
+      - !Ref 'PrivCidrRanges'
+  PrivSubnetCidrB:
+    Value: !Select
+      - 1
+      - !Ref 'PrivCidrRanges'
+  PrivSubnetsList:
+    Value: !Join
+      - ','
+      - - !Ref 'PrivSubnetA'
+        - !Ref 'PrivSubnetB'
+  PrivateSubnetAId:
+    Value: !Ref 'PrivSubnetA'
+  PrivateSubnetBId:
+    Value: !Ref 'PrivSubnetB'
+  PubSubnetCidrA:
+    Value: !Select
+      - 0
+      - !Ref 'PubCidrRanges'
+  PubSubnetCidrB:
+    Value: !Select
+      - 1
+      - !Ref 'PubCidrRanges'
+  PubSubnetsList:
+    Value: !Join
+      - ','
+      - - !Ref 'PubSubnetA'
+        - !Ref 'PubSubnetB'
+  PublicSubnetAId:
+    Value: !Ref 'PubSubnetA'
+  PublicSubnetBId:
+    Value: !Ref 'PubSubnetB'
+Parameters:
+  AvailabilityZone:
+    Type: String
+  Instance:
+    AllowedValues:
+      - t1.micro
+      - m1.small
+      - m1.medium
+      - m1.large
+      - m1.xlarge
+    ConstraintDescription: must be a valid EC2 instance type.
+    Default: m1.small
+    Description: WebServer EC2 instance type
+    Type: String
+  PrivCidrRanges:
+    Description: list of private subnet ranges
+    Type: CommaDelimitedList
+  PubCidrRanges:
+    Description: list of public subnet ranges
+    Type: CommaDelimitedList
+  SSHKey:
+    Default: Shweta
+    Type: CommaDelimitedList
+  SecurityGroup:
+    Type: CommaDelimitedList
+  VpcCidrRange:
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+    Description: Cidr range for VPC
+    MaxLength: 18
+    MinLength: 9
+    Type: String
+  WebServerPort:
+    Default: '443'
+    Description: TCP/IP port of the web server
+    Type: String
+Resources:
+  AutoScalingGroup:
+    Properties:
+      LaunchConfigurationName: LaunchConfiguration
+      LoadBalancerNames: !Ref 'ElasticLoadBalancer'
+      MaxSize: '3'
+      MinSize: '1'
+      VPCZoneIdentifier:
+        - !Ref 'PubSubnetA'
+        - !Ref 'PubSubnetB'
+    Type: AWS::AutoScaling::AutoScalingGroup
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MaxBatchSize: '1'
+        MinInstancesInService: '1'
+        PauseTime: PT10M
+  CustomResource:
+    Properties:
+      DomainName: MyDomain
+      PrivateZone: false
+      ServiceToken: MyToken
+    Type: Custom::CustomRoute53ZoneInfo
+  Ec2InstancePrivateSubnetA:
+    Properties:
+      ImageId: !FindInMap
+        - AzMap
+        - !Ref 'AWS::Region'
+        - AMI
+      InstanceType: !Ref 'InstanceType'
+      KeyName: !Ref 'SSHKey'
+      SecurityGroups:
+        - !Ref 'MySecurityGroup'
+      SubnetId: !GetAtt 'PrivSubnetA.SubnetId'
+    Type: AWS::EC2::Instance
+  Ec2InstancePrivateSubnetB:
+    Properties:
+      ImageId: !FindInMap
+        - AzMap
+        - !Ref 'AWS::Region'
+        - AMI
+      InstanceType: !Ref 'InstanceType'
+      KeyName: !Ref 'SSHKey'
+      SecurityGroups:
+        - !Ref 'MySecurityGroup'
+      SubnetId: !GetAtt 'PrivSubnetB.SubnetId'
+    Type: AWS::EC2::Instance
+  ElasticLoadBalancer:
+    Properties:
+      AccessLoggingPolicy:
+        EmitInterval: 5
+        Enabled: true
+        S3BucketName: logging
+        S3BucketPrefix: myELB
+      AvailabilityZones: !GetAZs ''
+      ConnectionDrainingPolicy:
+        Enabled: true
+        Timeout: 300
+      CrossZone: 'true'
+      HealthCheck:
+        HealthyThreshold: '3'
+        Interval: '30'
+        Target: !Join
+          - ''
+          - - 'HTTPS:'
+            - !Ref 'WebServerPort'
+            - /
+        Timeout: '5'
+        UnhealthyThreshold: '5'
+      Instances:
+        - !Ref 'Ec2InstancePrivateSubnetA'
+        - !Ref 'Ec2InstancePrivateSubnetB'
+      Listeners:
+        - InstancePort: !Ref 'WebServerPort'
+          LoadBalancerPort: '443'
+          Protocol: HTTPS
+      Subnets:
+        - !Ref 'PubSubnetA'
+        - !Ref 'PubSubnetB'
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+  MyPrivateEniA:
+    Properties:
+      GroupSet:
+        - !Ref 'MySecurityGroup'
+      SourceDestCheck: 'false'
+      SubnetId: !GetAtt 'PrivSubnetA.SubnetId'
+    Type: AWS::EC2::NetworkInterface
+  MyPrivateEniAttachmentA:
+    Properties:
+      DeviceIndex: '1'
+      InstanceId: !Ref 'Ec2InstancePrivateSubnetA'
+      NetworkInterfaceId: !Ref 'MyPrivateEniA'
+    Type: AWS::EC2::NetworkInterfaceAttachment
+  MyPrivateEniAttachmentB:
+    Properties:
+      DeviceIndex: '1'
+      InstanceId: !Ref 'Ec2InstancePrivateSubnetB'
+      NetworkInterfaceId: !Ref 'MyPrivateEniB'
+    Type: AWS::EC2::NetworkInterfaceAttachment
+  MyPrivateEniB:
+    Properties:
+      GroupSet:
+        - !Ref 'MySecurityGroup'
+      SourceDestCheck: 'false'
+      SubnetId: !GetAtt 'PrivSubnetB.SubnetId'
+    Type: AWS::EC2::NetworkInterface
+  MyPublicRecord:
+    Properties:
+      AliasTarget:
+        DNSName: !Ref 'ElasticLoadBalancer'
+        HostedZoneId: !Ref 'ElasticLoadBalancer'
+      HostedZoneId: !Ref 'CustomResource'
+      Name: MyPublicRecord-us-east-1-a
+      Type: A
+    Type: AWS::Route53::RecordSet
+  MyVpc:
+    Properties:
+      CidrBlock: !Ref 'VpcCidrRange'
+      EnableDnsHostnames: 'true'
+      EnableDnsSupport: 'true'
+      InstanceTenancy: default
+    Type: AWS::EC2::VPC
+  MyVpcFlowLogs:
+    Properties:
+      DeliverLogsPermissionArn: !Join
+        - ''
+        - - 'arn:aws:iam::'
+          - !Ref 'AWS::AccountId'
+          - :role/AWS_FLOW_LOGS
+      LogGroupName: !Join
+        - ''
+        - - VpcFlowLogsLogGroup
+          - '-'
+          - MyVPC
+      ResourceId: !Ref 'MyVpc'
+      ResourceType: VPC
+      TrafficType: ALL
+    Type: AWS::EC2::FlowLog
+  PrivSubnetA:
+    Properties:
+      AvailabilityZone: !Join
+        - ''
+        - - !Ref 'AWS::Region'
+          - a
+      CidrBlock: !Select
+        - 0
+        - !Ref 'PrivCidrRanges'
+      VpcId: !Ref 'MyVpc'
+    Type: AWS::EC2::Subnet
+  PrivSubnetB:
+    Properties:
+      AvailabilityZone: !Join
+        - ''
+        - - !Ref 'AWS::Region'
+          - b
+      CidrBlock: !Select
+        - 1
+        - !Ref 'PrivCidrRanges'
+      VpcId: !Ref 'MyVpc'
+    Type: AWS::EC2::Subnet
+  PrivateRTAssociationA:
+    Properties:
+      RouteTableId: !Ref 'PrivateRouteTableA'
+      SubnetId: !Ref 'PrivSubnetA'
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  PrivateRTAssociationB:
+    Properties:
+      RouteTableId: !Ref 'PrivateRouteTableB'
+      SubnetId: !Ref 'PrivSubnetB'
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  PrivateRouteTableA:
+    Properties:
+      VpcId: !Ref 'MyVpc'
+    Type: AWS::EC2::RouteTable
+  PrivateRouteTableB:
+    Properties:
+      VpcId: !Ref 'MyVpc'
+    Type: AWS::EC2::RouteTable
+  PubSubnetA:
+    Properties:
+      AvailabilityZone: !Join
+        - ''
+        - - !Ref 'AWS::Region'
+          - a
+      CidrBlock: !Select
+        - 0
+        - !Ref 'PubCidrRanges'
+      VpcId: !Ref 'MyVpc'
+    Type: AWS::EC2::Subnet
+  PubSubnetB:
+    Properties:
+      AvailabilityZone: !Join
+        - ''
+        - - !Ref 'AWS::Region'
+          - b
+      CidrBlock: !Select
+        - 1
+        - !Ref 'PubCidrRanges'
+      VpcId: !Ref 'MyVpc'
+    Type: AWS::EC2::Subnet
+  PublicRTAssociationA:
+    Properties:
+      RouteTableId: !Ref 'PublicRouteTable'
+      SubnetId: !Ref 'PubSubnetA'
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  PublicRTAssociationB:
+    Properties:
+      RouteTableId: !Ref 'PublicRouteTable'
+      SubnetId: !Ref 'PubSubnetB'
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  PublicRouteTable:
+    Properties:
+      VpcId: !Ref 'MyVpc'
+    Type: AWS::EC2::RouteTable
+  myIGWAttachVPC:
+    Properties:
+      InternetGatewayId: !Ref 'myigw'
+      VpcId: !Ref 'MyVpc'
+    Type: AWS::EC2::VPCGatewayAttachment
+  myigw:
+    Type: AWS::EC2::InternetGateway
